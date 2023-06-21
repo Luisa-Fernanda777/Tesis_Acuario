@@ -1,39 +1,45 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include "GravityTDS.h"
+#include <DFRobot_ESP_PH_WITH_ADC.h> 
+#include "GravityTDS.hpp"
 
+DFRobot_ESP_PH_WITH_ADC ph;
 #define OneWireBus 4
+#define ESPADC 4096.0   //the esp Analog Digital Convertion value
+#define ESPVOLTAGE 3300 //the esp voltage supply value
+#define PH_PIN 35    //the esp gpio data pin number
+
 OneWire onewire(OneWireBus); //objeto para pin onewire 
 DallasTemperature DS18B20(&onewire);
 
-#define TDS_SENSOR_PIN 27
-GravityTDS gravityTds;
-float temperature = 25,tdsValue = 0, tdstotal = 0;
+float temperature = 25,tds_Value = 0, tdstotal = 0,  phValue, voltage_ph;
 
 void setup() {
  Serial.begin(115200);
  DS18B20.begin();
- 
- gravityTds.setPin(TDS_SENSOR_PIN);
- gravityTds.setAref(3.3);  //reference voltage on ADC, default 5.0V on Arduino UNO
- gravityTds.setAdcRange(4096);  //1024 for 10bit ADC;4096 for 12bit ADC
- gravityTds.begin();  //initialization
- 
+ TDS_Begin();
 }
 
 void loop() {
   DS18B20.requestTemperatures(); 
   float temperatureC = DS18B20.getTempCByIndex(0);
   Serial.println(temperatureC);
-  tdsValue = analogRead(TDS_SENSOR_PIN);
-  tdstotal = tdsValue * 0.3502;
-  Serial.println(tdstotal);
+  
+  TDS_Update(temperatureC);
+  tds_Value = TDS_Get_Value();
+  Serial.println(tds_Value);
 
-  //temperature = readTemperature();  //add your temperature sensor and read it
-    gravityTds.setTemperature(temperature);  // set the temperature and execute temperature compensation
-    gravityTds.update();  //sample and calculate 
-    tdsValue = gravityTds.getTdsValue();  // then get the value
-    Serial.print(tdsValue);
-    Serial.println("ppm");
+  static unsigned long timepoint = millis();
+    if(millis()-timepoint>1000U){                  //time interval: 1s
+        timepoint = millis();
+        //temperature = readTemperature();         // read your temperature sensor to execute temperature compensation
+        voltage_ph = analogRead(PH_PIN)/4096.0*3300;  // read the voltage
+        phValue = ph.readPH(voltage_ph,temperatureC);  // convert voltage to pH with temperature compensation
+        Serial.print("temperature:");
+        Serial.print(temperatureC,1);
+        Serial.print("^C  pH:");
+        Serial.println(phValue,2);
+    }
+    ph.calibration(voltage_ph,temperatureC);           // calibration process by Serail CMD
     delay(1500);
 }
